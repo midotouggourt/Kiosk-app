@@ -3,14 +3,14 @@ import pandas as pd
 import sqlite3
 import datetime
 
-# إعدادات الواجهة البصرية المتكاملة
+# إعدادات الواجهة البصرية المتكاملة للمتصفح والتابلت
 st.set_page_config(page_title="نظام كاشير الكشك الذكي المطور", layout="wide", initial_sidebar_state="expanded")
 
 # الاتصال بقاعدة البيانات السحابية (تنشأ تلقائياً في السيرفر)
 conn = sqlite3.connect("kiosk_cloud_db.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# تأسيس الجداول
+# تأسيس الجداول الأساسية
 cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
 cursor.execute("CREATE TABLE IF NOT EXISTS suppliers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, company TEXT)")
 cursor.execute('''CREATE TABLE IF NOT EXISTS products 
@@ -111,7 +111,7 @@ with tab1:
             
         col_act1, col_action2 = st.columns(2)
         with col_act1:
-            if st.button("🚀 تأكيد البيع وحفظ الإيصال", type="primary", use_container_width=True):
+            if st.button("🚀 تأكيد البيع وحفظ الفاتورة واقناع العملية", type="primary", use_container_width=True):
                 if "الكريدي" in pay_method and customer_name:
                     cursor.execute("INSERT INTO debts (customer_name, total_amount, remaining) VALUES (?, ?, ?)", (customer_name, cart_total, cart_total))
                 
@@ -167,5 +167,3 @@ with tab3:
             b_code = st.text_input("باركود السلعة الجديدة (امسح بالقارئ):")
             p_name = st.text_input("اسم السلعة بالتفصيل:")
             u_type = st.selectbox("طريقة القياس والبيع الأساسية:", ["بالقطعة (وحدة/علبة)", "بالوزن (كيلوغرام)"])
-            pieces_in_box = st.number_input("عدد القطع/القارو داخل العلبة الواحدة (20 للسجائر، و1 للمواد العادية):", min_value=1, value=1)
-        with col_m2:
