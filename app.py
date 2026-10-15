@@ -8,7 +8,7 @@ from PIL import Image
 st.set_page_config(page_title="كاشير الكشك Pro", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("<style>.block-container {padding: 0.5rem 1rem;} .stButton button {padding: 4px 8px;}</style>", unsafe_allow_html=True)
 
-conn = sqlite3.connect("kiosk_cloud_final_v9.db", check_same_thread=False)
+conn = sqlite3.connect("kiosk_cloud_final_v10.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
 cursor.execute('''CREATE TABLE IF NOT EXISTS products 
@@ -94,7 +94,6 @@ with t3:
             stk = st.number_input("المخزون بالعلب:")
         if st.form_submit_button("💾 حفظ السلعة وتفعيل زر اللمس", use_container_width=True):
             if bc and nm:
-                # تم إصلاح عدد المتغيرات بدقة لتطابق 11 خانة مع المخزون الأدنى (5.0) والصورة الفارغة حالياً
                 cursor.execute("INSERT OR REPLACE INTO products (barcode, name, category_id, unit_type, buy_price_box, sell_box, sell_piece, pieces_per_box, stock_box, min_stock, image_blob) VALUES (?, ?, ?, 'قطعة', ?, ?, ?, ?, ?, 5.0, NULL)", (bc, nm, cat_dict[cc], c_p, b_p, p_p, int(p_box), stk))
                 conn.commit()
                 st.success("✅ تم الحفظ بنجاح!")
