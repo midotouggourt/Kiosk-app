@@ -6,11 +6,11 @@ import datetime
 # إعدادات الواجهة البصرية المتكاملة للمتصفح والتابلت
 st.set_page_config(page_title="نظام كاشير الكشك الذكي المطور", layout="wide", initial_sidebar_state="expanded")
 
-# الاتصال بقاعدة البيانات السحابية (تنشأ تلقائياً في السيرفر)
+# الاتصال بقاعدة البيانات السحابية
 conn = sqlite3.connect("kiosk_cloud_db.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# تأسيس الجداول الأساسية
+# تأسيس الجداول
 cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
 cursor.execute("CREATE TABLE IF NOT EXISTS suppliers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, phone TEXT, company TEXT)")
 cursor.execute('''CREATE TABLE IF NOT EXISTS products 
@@ -25,15 +25,12 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS receipts_archive
                   (id INTEGER PRIMARY KEY AUTOINCREMENT, items_html TEXT, total_amount REAL, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 conn.commit()
 
-# نظام السلال لـ 5 زبائن متزامنين في ذاكرة المتصفح
+# نظام السلال لـ 5 زبائن متزامنين
 if 'carts' not in st.session_state:
     st.session_state.carts = {f"🛒 الزبون رقم {i}": [] for i in range(1, 6)}
 
-# تصميم العنوان البصري العلوي
 st.markdown("<h1 style='text-align: center; color: #1E88E5;'>🏪 نظام كاشير وتسيير مبيعات الكشك الذكي Pro</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #757575;'>واجهة سحابية سريعة مخصصة لشاشات اللمس والتابلت</p>", unsafe_allow_html=True)
 
-# تقسيم التطبيق إلى أقسام ملوّنة تفاعلية
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🛒 كاشير المبيعات السريعة", 
     "⚡ التموين وتحديث الأسعار", 
@@ -46,124 +43,120 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 # ----------------- 1. كاشير المبيعات السريعة -----------------
 with tab1:
     st.subheader("⚡ نقطة البيع السريع لعدة زبائن معاً")
-    
-    # تنبيهات نقص المخزن في واجهة ملوّنة
-    cursor.execute("SELECT name, stock_box, min_stock FROM products WHERE stock_box <= min_stock")
-    low_stock_items = cursor.fetchall()
-    for item in low_stock_items:
-        st.error(f"⚠️ **تنبيه مخزون منخفض:** السلعة **[{item[0]}]** أوشكت على النفاد، المتبقي: {item[1]:.2f} علبة/وحدة!")
-
-    col_select, col_barcode = st.columns(2)
-    with col_select:
-        active_cart = st.selectbox("📌 اختر الزبون الحالي:", list(st.session_state.carts.keys()))
-    with col_barcode:
-        barcode_scan = st.text_input("امسح باركود السلعة بالقارئ أو اكتبه هنا:", key=f"scan_{active_cart}")
+    active_cart = st.selectbox("📌 اختر الزبون الحالي:", list(st.session_state.carts.keys()))
+    barcode_scan = st.text_input("امسح باركود السلعة بالقارئ للبيع:", key=f"scan_{active_cart}")
     
     if barcode_scan:
-        cursor.execute("SELECT p.*, c.name FROM products p LEFT JOIN categories c ON p.category_id = c.id WHERE p.barcode=?", (barcode_scan,))
+        cursor.execute("SELECT * FROM products WHERE barcode=?", (barcode_scan,))
         prod = cursor.fetchone()
-        
         if prod:
-            st.success(f"📦 تم رصد السلعة: **{prod[1]}** | المخزون المتوفر: **{prod[8]:.2f}** علبة/وحدة")
+            st.success(f"📦 السلعة: **{prod[1]}** | المتوفر: {prod[8]:.2f} علبة")
+            s_type = st.radio("نوع البيع:", ["بالعلبة كاملة/الجملة", "بالقارو / بالقطعة منفردة"] if prod[7] > 1 else ["بالقطعة (وحدة)", "بالوزن (كيلوغرام)"])
+            qty = st.number_input("الكمية المطلوبة:", min_value=0.01, value=1.0)
             
-            col_t, col_q = st.columns(2)
-            with col_t:
-                s_type = st.radio("نوع عملية البيع للزبون:", ["بالعلبة كاملة/الجملة", "بالقارو / بالقطعة منفردة"] if prod[7] > 1 else ["بالقطعة (وحدة)", "بالوزن (كيلوغرام)"], key=f"type_{active_cart}")
-            with col_q:
-                qty = st.number_input("الكمية أو الوزن المطلوبة:", min_value=0.01 if "الوزن" in s_type else 1.0, value=1.0, step=1.0, key=f"qty_{active_cart}")
-            
-            if s_type in ["بالعلبة كاملة/الجملة", "بالقطعة (وحدة)"]:
+            if s_type == "بالعلبة كاملة/الجملة" or s_type == "بالقطعة (وحدة)":
                 price = prod[5]
                 stock_deduction = qty
                 profit = (prod[5] - prod[4]) * qty
             elif s_type == "بالقارو / بالقطعة منفردة":
                 price = prod[6]
                 stock_deduction = qty / prod[7]
-                single_cost = prod[4] / prod[7]
-                profit = (prod[6] - single_cost) * qty
-            else: # الوزن
+                profit = (prod[6] - (prod[4]/prod[7])) * qty
+            else:
                 price = prod[5]
                 stock_deduction = qty
                 profit = (prod[5] - prod[4]) * qty
                 
-            if st.button(f"➕ إضافة السلعة إلى سلة [{active_cart}]", use_container_width=True):
+            if st.button("➕ إضافة إلى السلة"):
                 st.session_state.carts[active_cart].append({
-                    'barcode': prod[0], 'name': prod[1], 'type': s_type, 'qty': qty, 'price': price, 'total': qty * price, 'profit': profit, 'deduction': stock_deduction
+                    'barcode': barcode_scan, 'name': prod[1], 'type': s_type, 'qty': qty, 'price': price, 'total': qty * price, 'profit': profit, 'deduction': stock_deduction
                 })
                 st.rerun()
         else:
-            st.error("❌ هذا المنتج غير مسجل في مخزن الكشك مسبقاً! يرجى إضافته من قسم المخزن.")
+            st.error("❌ المنتج غير مسجل.")
 
-    # استعراض السلة الحالية للزبون المختار بتصميم تفاعلي
-    st.markdown(f"#### 🛒 محتويات سلة مبيعات: **{active_cart}**")
     if st.session_state.carts[active_cart]:
         df_cart = pd.DataFrame(st.session_state.carts[active_cart])
         st.dataframe(df_cart[['name', 'type', 'qty', 'price', 'total']], use_container_width=True)
-        
         cart_total = df_cart['total'].sum()
-        st.markdown(f"### 💰 المبلغ الإجمالي المطلوب: <span style='color:#2E7D32;'>{cart_total:,} دج</span>", unsafe_allow_html=True)
+        st.markdown(f"### 💰 الإجمالي: {cart_total:,} دج")
         
-        col_pay, col_cust = st.columns(2)
-        with col_pay:
-            pay_method = st.selectbox("طريقة الدفع للصندوق:", ["نقداً (قيد الخزينة اليومية)", "دفع مؤجل (تسجيل في الكريدي)"], key=f"pay_{active_cart}")
-        with col_cust:
-            customer_name = st.text_input("اسم الزبون المدين (في حال الكريدي):", key=f"cust_{active_cart}")
-            
-        col_act1, col_action2 = st.columns(2)
-        with col_act1:
-            if st.button("🚀 تأكيد البيع وحفظ الفاتورة واقناع العملية", type="primary", use_container_width=True):
-                if "الكريدي" in pay_method and customer_name:
-                    cursor.execute("INSERT INTO debts (customer_name, total_amount, remaining) VALUES (?, ?, ?)", (customer_name, cart_total, cart_total))
-                
-                rows_html = ""
-                for item in st.session_state.carts[active_cart]:
-                    cursor.execute("INSERT INTO sales (barcode, name, category_name, sale_type, qty, total_price, profit) VALUES (?, ?, 'كشك', ?, ?, ?, ?)",
-                                   (item['barcode'], item['name'], item['type'], item['qty'], item['total'], item['profit']))
-                    cursor.execute("UPDATE products SET stock_box = stock_box - ? WHERE barcode = ?", (item['deduction'], item['barcode']))
-                    rows_html += f"<tr><td>{item['name']}</td><td>{item['qty']}</td><td>{item['total']:,} دج</td></tr>"
-                
-                cursor.execute("INSERT INTO receipts_archive (items_html, total_amount) VALUES (?, ?)", (rows_html, cart_total))
-                conn.commit()
-                st.session_state.carts[active_cart] = []
-                st.success("✅ تمت العملية بنجاح وتم حفظ الفاتورة في النظام!")
-                st.balloons()
-                st.rerun()
-        with col_action2:
-            if st.button("🗑️ إفراغ وإلغاء هذه السلة بالكامل", use_container_width=True):
-                st.session_state.carts[active_cart] = []
-                st.rerun()
-    else:
-        st.info("سلة هذا الزبون فارغة حالياً. امسح السلع لإضافتها.")
+        pay_method = st.selectbox("طريقة الدفع:", ["نقداً", "كريدي"])
+        customer_name = st.text_input("اسم الزبون:") if pay_method == "كريدي" else ""
+        
+        if st.button("🚀 تأكيد البيع وحفظ الفاتورة"):
+            if pay_method == "كريدي" and customer_name:
+                cursor.execute("INSERT INTO debts (customer_name, total_amount, remaining) VALUES (?, ?, ?)", (customer_name, cart_total, cart_total))
+            for item in st.session_state.carts[active_cart]:
+                cursor.execute("INSERT INTO sales (barcode, name, sale_type, qty, total_price, profit) VALUES (?, ?, ?, ?, ?, ?)",
+                               (item['barcode'], item['name'], item['type'], item['qty'], item['total'], item['profit']))
+                cursor.execute("UPDATE products SET stock_box = stock_box - ? WHERE barcode = ?", (item['deduction'], item['barcode']))
+            conn.commit()
+            st.session_state.carts[active_cart] = []
+            st.success("✅ تم البيع بنجاح!")
+            st.rerun()
 
-# ----------------- 2. واجهة التموين وتحديث الأسعار -----------------
+# ----------------- 2. واجهة التموين -----------------
 with tab2:
-    st.subheader("⚡ استقبال وتعبئة سلع الموردين وتعديل الأسوام")
-    supply_barcode = st.text_input("امسح باركود السلعة المستلمة لتحديث مخزونها وسعرها:")
+    st.subheader("⚡ استقبال وتعبئة سلع الموردين")
+    supply_barcode = st.text_input("امسح باركود السلعة المستلمة:")
     if supply_barcode:
         cursor.execute("SELECT * FROM products WHERE barcode=?", (supply_barcode,))
         prod_refill = cursor.fetchone()
         if prod_refill:
-            st.info(f"📥 السلعة المكتشفة: **{prod_refill[1]}** | المخزون الحالي: **{prod_refill[8]:.2f}** علبة/وحدة")
-            with st.form("quick_refill_form"):
-                col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-                with col_r1: added_qty = st.number_input("الكمية المضافة الجديدة للمخزن:", min_value=0.0, value=10.0, step=1.0)
-                with col_r2: new_buy = st.number_input("سومة الشراء الجديدة الكلية (دج):", min_value=0.0, value=prod_refill[4])
-                with col_r3: new_sell_box = st.number_input("سومة بيع العلبة / الجملة (دج):", min_value=0.0, value=prod_refill[5])
-                with col_r4: new_sell_piece = st.number_input("سومة بيع القطعة/القارو تجزئة (دج):", min_value=0.0, value=prod_refill[6])
-                
-                if st.form_submit_button("💾 ضخ الحزمة الجديدة وتحديث الأسعار فوراً", use_container_width=True):
-                    cursor.execute('''UPDATE products SET stock_box = stock_box + ?, buy_price_box = ?, sell_box = ?, sell_piece = ? WHERE barcode = ?''', 
-                                   (added_qty, new_buy, new_sell_box, new_sell_piece, supply_barcode))
+            st.info(f"📥 السلعة: **{prod_refill[1]}**")
+            with st.form("refill_form"):
+                added_qty = st.number_input("الكمية المضافة جديدة:", value=10.0)
+                new_buy = st.number_input("سعر الشراء الجديد للعلبة:", value=prod_refill[4])
+                new_box_sell = st.number_input("سعر بيع العلبة الجديد:", value=prod_refill[5])
+                new_piece_sell = st.number_input("سعر بيع القطعة الجديد:", value=prod_refill[6])
+                if st.form_submit_button("💾 تحديث فوري"):
+                    cursor.execute("UPDATE products SET stock_box = stock_box + ?, buy_price_box=?, sell_box=?, sell_piece=? WHERE barcode=?", 
+                                   (added_qty, new_buy, new_box_sell, new_piece_sell, supply_barcode))
                     conn.commit()
-                    st.success("✅ تم تحديث الكمية وتثبيت الأسعار الجديدة بنجاح في نظام الكاشير!")
-                    st.rerun()
+                    st.success("✅ تم التحديث!")
 
-# ----------------- 3. المخزن وجرد السلع -----------------
+# ----------------- 3. المخزن وجرد السلع (مصحح بالكامل) -----------------
 with tab3:
-    st.subheader("📥 تسجيل السلع الجديدة لأول مرة وتفقد الرفوف")
+    st.subheader("📥 تسجيل السلع الجديدة لأول مرة")
     with st.form("add_new_product_form"):
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            b_code = st.text_input("باركود السلعة الجديدة (امسح بالقارئ):")
-            p_name = st.text_input("اسم السلعة بالتفصيل:")
-            u_type = st.selectbox("طريقة القياس والبيع الأساسية:", ["بالقطعة (وحدة/علبة)", "بالوزن (كيلوغرام)"])
+        b_code = st.text_input("باركود السلعة الجديدة:")
+        p_name = st.text_input("اسم السلعة بالتفصيل:")
+        u_type = st.selectbox("طريقة القياس والبيع الأساسية:", ["بالقطعة (وحدة/علبة)", "بالوزن (كيلوغرام)"])
+        pieces_in_box = st.number_input("عدد القطع/القارو داخل العلبة الواحدة (20 للسجائر):", min_value=1, value=1)
+        cost_p = st.number_input("سعر شراء العلبة الكاملة من المورد (دج):", min_value=0.0, value=0.0)
+        box_p = st.number_input("سعر بيع العلبة كاملة للمستهلك (دج):", min_value=0.0, value=0.0)
+        piece_p = st.number_input("سعر بيع القارو الواحد / القطعة منفردة (دج):", min_value=0.0, value=0.0)
+        curr_stock = st.number_input("إجمالي المخزون الابتدائي المتوفر حالياً (علب):", min_value=0.0, value=0.0)
+        min_stock = st.number_input("حد التنبيه عند قرب النفاد:", min_value=1.0, value=5.0)
+            
+        if st.form_submit_button("💾 حفظ السلعة الجديدة بنجاح", use_container_width=True):
+            if b_code and p_name:
+                cursor.execute("INSERT OR REPLACE INTO products (barcode, name, category_id, unit_type, buy_price_box, sell_box, sell_piece, pieces_per_box, stock_box, min_stock, supplier_id) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)",
+                               (b_code, p_name, u_type, cost_p, box_p, piece_p, int(pieces_in_box), curr_stock, min_stock))
+                conn.commit()
+                st.success(f"تم بنجاح حفظ المنتج **'{p_name}'**!")
+                st.rerun()
+
+    st.markdown("#### 📋 قائمة المخزن")
+    df_products = pd.read_sql_query("SELECT barcode, name, sell_box, sell_piece, stock_box FROM products", conn)
+    st.dataframe(df_products, use_container_width=True)
+
+# ----------------- 4. سجل الديون -----------------
+with tab4:
+    st.subheader("📋 كارني ديون الكشك الرقمي")
+    df_debts = pd.read_sql_query("SELECT id, customer_name, total_amount, remaining FROM debts WHERE remaining > 0", conn)
+    st.dataframe(df_debts, use_container_width=True)
+
+# ----------------- 5. الأرباح وحساب الفائدة -----------------
+with tab5:
+    st.subheader("📊 جرد حساب الفائدة وأرباح الصندوق")
+    df_sales_raw = pd.read_sql_query("SELECT * FROM sales", conn)
+    if not df_sales_raw.empty:
+        st.metric("💰 مجموع الأرباح الصافية الحالية", f"{df_sales_raw['profit'].sum():,.2f} دج")
+        st.dataframe(df_sales_raw, use_container_width=True)
+
+# ----------------- 6. العائلات -----------------
+with tab6:
+    st.subheader("🗂️ تصنيف الموردين والعائلات")
+    st.info("النظام جاهز ومفعل تلقائياً.")
