@@ -53,7 +53,7 @@ with tab1:
     for item in low_stock_items:
         st.error(f"⚠️ **تنبيه مخزون منخفض:** السلعة **[{item[0]}]** أوشكت على النفاد، المتبقي: {item[1]:.2f} علبة/وحدة!")
 
-    col_select, col_barcode = st.columns([1, 2])
+    col_select, col_barcode = st.columns(2)
     with col_select:
         active_cart = st.selectbox("📌 اختر الزبون الحالي:", list(st.session_state.carts.keys()))
     with col_barcode:
@@ -117,7 +117,7 @@ with tab1:
                 
                 rows_html = ""
                 for item in st.session_state.carts[active_cart]:
-                    cursor.execute("INSERT INTO sales (barcode, name, sale_type, qty, total_price, profit) VALUES (?, ?, ?, ?, ?, ?)",
+                    cursor.execute("INSERT INTO sales (barcode, name, category_name, sale_type, qty, total_price, profit) VALUES (?, ?, 'كشك', ?, ?, ?, ?)",
                                    (item['barcode'], item['name'], item['type'], item['qty'], item['total'], item['profit']))
                     cursor.execute("UPDATE products SET stock_box = stock_box - ? WHERE barcode = ?", (item['deduction'], item['barcode']))
                     rows_html += f"<tr><td>{item['name']}</td><td>{item['qty']}</td><td>{item['total']:,} دج</td></tr>"
