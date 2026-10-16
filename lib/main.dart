@@ -1,7 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // دمج المفاتيح السرية الخاصة بكشكك السحابي التي استخرجناها معاً
+  await Firebase.initializeApp(
+    options: const FirebaseOptions(
+      apiKey: "AIzaSyC_zcArXxIGWJi1TRNZ9gKjfoiX0sQ4aD8",
+      authDomain: "://firebaseapp.com",
+      projectId: "kiosk-app-3f1a4",
+      storageBucket: "kiosk-app-3f1a4.firebasestorage.app",
+      messagingSenderId: "288511181299",
+      appId: "1:288511181299:web:b0b10fb26159811d126286",
+      measurementId: "G-QRCSGDEDRM",
+    ),
+  );
+  
   runApp(const CloudCashierApp());
 }
 
@@ -252,18 +268,3 @@ class SalesScreen extends StatelessWidget {
 }
 
 class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) { return const Center(child: Text('إدارة الجرد والمخزون اليدوي')); }
-}
-
-class SuppliersScreen extends StatelessWidget {
-  const SuppliersScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) { return const Center(child: Text('سجل الموردين والديون')); }
-}
-
-class ReportsScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> invoices;
-  const ReportsScreen({Key? key, required this.invoices}) : super(key: key);
-  @override
