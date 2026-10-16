@@ -24,7 +24,8 @@ t1, t2, t3, t4, t5 = st.tabs(["🛒 كاشير المبيعات", "⚡ التم�
 
 cursor.execute("SELECT id, name FROM categories")
 cats_raw = cursor.fetchall()
-cat_dict = {row: row for row in cats_raw}
+# تحويل العائلات إلى قاموس يسهل التعامل معه بدقة
+cat_dict = {row[1]: row[0] for row in cats_raw}
 cat_names = list(cat_dict.keys())
 
 with t1:
@@ -33,26 +34,39 @@ with t1:
         active_cart = st.selectbox("الزبون:", list(st.session_state.carts.keys()))
         f_cat = st.radio("📂 تصفية المنتجات حسب العائلة:", ["الكل"] + cat_names, horizontal=True)
         
-        if f_cat == "الكل": cursor.execute("SELECT * FROM products")
-        else: cursor.execute("SELECT * FROM products WHERE category_id=?", (cat_dict[f_cat],))
+        if f_cat == "الكل": 
+            cursor.execute("SELECT * FROM products")
+        else: 
+            cursor.execute("SELECT * FROM products WHERE category_id=?", (cat_dict[f_cat],))
         prods = cursor.fetchall()
         
         if prods:
             p_cols = st.columns(3)
             for idx, p in enumerate(prods):
+                p_barcode, p_name, p_cat_id, p_unit, p_buy_box, p_sell_box, p_sell_piece, p_pieces_per_box, p_stock, p_min = p
                 with p_cols[idx % 3]:
-                    st.markdown(f"<div style='background:#F8F9FA; padding:5px; border-radius:6px; text-align:center; border:1px solid #DEE2E6;'>📦 <b>{p}</b><br><span style='color:#1E88E5; font-size:11px;'>علبة: {p}دج | قارو: {p}دج</span></div>", unsafe_allow_html=True)
-                    b_type = st.selectbox("النوع:", ["بالعلبة", "بالقارو"], key=f"t_{idx}_{p}")
-                    b_qty = st.number_input("الكمية المطلوبة يدوياً:", min_value=1.0, value=1.0, step=1.0, key=f"q_{idx}_{p}")
+                    st.markdown(f"<div style='background:#F8F9FA; padding:5px; border-radius:6px; text-align:center; border:1px solid #DEE2E6;'>📦 <b>{p_name}</b><br><span style='color:#1E88E5; font-size:11px;'>علبة: {p_sell_box}دج | قارو: {p_sell_piece}دج</span></div>", unsafe_allow_html=True)
+                    b_type = st.selectbox("النوع:", ["بالعلبة", "بالقارو"], key=f"t_{idx}_{p_barcode}")
+                    b_qty = st.number_input("الكمية المطلوبة يدوياً:", min_value=1.0, value=1.0, step=1.0, key=f"q_{idx}_{p_barcode}")
                     
-                    if st.button(f"➕ إضافة {p[:8]}", key=f"b_{idx}_{p}"):
-                        fp = p if "علبة" in b_type else p
-                        sd = b_qty if "علبة" in b_type else b_qty / p
-                        prof = (p-p) * b_qty if "علبة" in b_type else (p-(p/p)) * b_qty
+                    if st.button(f"➕ إضافة {p_name[:8]}", key=f"b_{idx}_{p_barcode}"):
+                        fp = p_sell_box if "علبة" in b_type else p_sell_piece
+                        sd = b_qty if "علبة" in b_type else b_qty / p_pieces_per_box
+                        
+                        # حساب الأرباح الصافية بدقة بناءً على التجزئة أو العلبة كاملة
+                        if "علبة" in b_type:
+                            prof = (p_sell_box - p_buy_box) * b_qty
+                            unit_prof = p_sell_box - p_buy_box
+                            unit_deduction = 1.0
+                        else:
+                            buy_single_piece = p_buy_box / p_pieces_per_box
+                            prof = (p_sell_piece - buy_single_piece) * b_qty
+                            unit_prof = p_sell_piece - buy_single_piece
+                            unit_deduction = 1.0 / p_pieces_per_box
                         
                         existing_item = None
                         for item in st.session_state.carts[active_cart]:
-                            if item['barcode'] == p and item['type'] == b_type:
+                            if item['barcode'] == p_barcode and item['type'] == b_type:
                                 existing_item = item
                                 break
                         if existing_item:
@@ -62,7 +76,8 @@ with t1:
                             existing_item['deduction'] += sd
                         else:
                             st.session_state.carts[active_cart].append({
-                                'barcode': p, 'name': p, 'type': b_type, 'qty': b_qty, 'price': fp, 'total': fp * b_qty, 'profit': prof, 'deduction': sd, 'unit_profit': (p-p) if "علبة" in b_type else (p-(p/p)), 'unit_deduction': 1.0 if "علبة" in b_type else 1.0 / p
+                                'barcode': p_barcode, 'name': p_name, 'type': b_type, 'qty': b_qty, 'price': fp, 
+                                'total': fp * b_qty, 'profit': prof, 'deduction': sd, 'unit_profit': unit_prof, 'unit_deduction': unit_deduction
                             })
                         st.rerun()
                         
@@ -71,15 +86,16 @@ with t1:
             cursor.execute("SELECT * FROM products WHERE barcode=?", (b_scan,))
             r = cursor.fetchone()
             if r:
+                r_barcode, r_name, r_cat_id, r_unit, r_buy_box, r_sell_box, r_sell_piece, r_pieces_per_box, r_stock, r_min = r
                 st.session_state.carts[active_cart].append({
-                    'barcode': r, 'name': r, 'type': "بالعلبة", 'qty': 1.0, 'price': r, 'total': r, 'profit': (r-r), 'deduction': 1.0, 'unit_profit': (r-r), 'unit_deduction': 1.0
+                    'barcode': r_barcode, 'name': r_name, 'type': "بالعلبة", 'qty': 1.0, 'price': r_sell_box, 
+                    'total': r_sell_box, 'profit': (r_sell_box - r_buy_box), 'deduction': 1.0, 'unit_profit': (r_sell_box - r_buy_box), 'unit_deduction': 1.0
                 })
                 st.rerun()
     with cl:
         st.markdown("##### 🛒 سلة المبيعات")
         cart_data = st.session_state.carts[active_cart]
         if cart_data:
-            # عرض عناصر السلة مع أزرار التحكم الفردية لكل سطر هندسياً
             for c_idx, item in enumerate(cart_data):
                 st.markdown(f"<div style='padding:5px; border-bottom:1px solid #EEE;'><b>{item['name']}</b> ({item['type']})</div>", unsafe_allow_html=True)
                 col_q1, col_q2, col_q3, col_del = st.columns([1, 2, 1, 2])
@@ -112,7 +128,8 @@ with t1:
             pay = st.radio("طريقة الدفع:", ["كاش", "كريدي"], horizontal=True)
             c_name = st.text_input("اسم الزبون المدين:") if "كريدي" in pay else ""
             if st.button("🚀 تأكيد وحفظ البيع", type="primary", use_container_width=True):
-                if "كريدي" in pay and c_name: cursor.execute("INSERT INTO debts (customer_name, total_amount, remaining) VALUES (?, ?, ?)", (c_name, tot, tot))
+                if "كريدي" in pay and c_name: 
+                    cursor.execute("INSERT INTO debts (customer_name, total_amount, remaining) VALUES (?, ?, ?)", (c_name, tot, tot))
                 for i in cart_data:
                     cursor.execute("INSERT INTO sales (barcode, name, sale_type, qty, total_price, profit) VALUES (?, ?, ?, ?, ?, ?)", (i['barcode'], i['name'], i['type'], i['qty'], i['total'], i['profit']))
                     cursor.execute("UPDATE products SET stock_box = stock_box - ? WHERE barcode = ?", (i['deduction'], i['barcode']))
@@ -120,7 +137,8 @@ with t1:
                 st.session_state.carts[active_cart] = []
                 st.success("✅ تم الحفظ بنجاح!")
                 st.rerun()
-        else: st.info("السلة فارغة حالياً.")
+        else: 
+            st.info("السلة فارغة حالياً.")
 
 with t3:
     st.markdown("#### 📂 1. إدارة عائلات المنتجات")
@@ -133,7 +151,8 @@ with t3:
                     conn.commit()
                     st.success("✅ تم تفعيل العائلة!")
                     st.rerun()
-                except: st.error("⚠️ مسجلة سابقاً.")
+                except: 
+                    st.error("⚠️ مسجلة سابقاً.")
 
     st.markdown("---")
     st.markdown("#### 📦 2. تسجيل السلع وتعبئة الرفوف")
@@ -143,27 +162,7 @@ with t3:
             bc = st.text_input("باركود السلعة الجديدة (امسح بالقارئ):")
             nm = st.text_input("اسم السلعة بالتفصيل:")
             cc = st.selectbox("حدد العائلة:", cat_names)
-            p_box = st.number_input("عدد السجائر/القطع في الععلبة:", min_value=1, value=20)
+            p_box = st.number_input("عدد السجائر/القطع في العلبة:", min_value=1, value=20)
         with i2:
             c_p = st.number_input("سعر الشراء من المورد (دج):")
             b_p = st.number_input("سعر بيع العلبة كاملة (دج):")
-            p_p = st.number_input("سعر بيع القارو تجزئة (دج):")
-            stk = st.number_input("المخزون بالعلب:")
-        if st.form_submit_button("💾 حفظ السلعة وتفعيل زر اللمس", use_container_width=True):
-            if bc and nm:
-                cursor.execute("INSERT OR REPLACE INTO products (barcode, name, category_id, unit_type, buy_price_box, sell_box, sell_piece, pieces_per_box, stock_box, min_stock) VALUES (?, ?, ?, 'قطعة', ?, ?, ?, ?, ?, 5.0)", (bc, nm, cat_dict[cc], c_p, b_p, p_p, int(p_box), stk))
-                conn.commit()
-                st.success("✅ تم بنجاح جرد السلعة!")
-                st.rerun()
-    cursor.execute("SELECT barcode, name, sell_box, stock_box FROM products")
-    st.table([{"الباركود": r[0], "الاسم": r[1], "بيع العلبة": r[2], "المخزون": r[3]} for r in cursor.fetchall()])
-
-with t2:
-    st.subheader("⚡ تعبئة سلع الموردين")
-    s_bc = st.text_input("امسح باركود السلعة للتعبئة:")
-    if s_bc:
-        cursor.execute("SELECT * FROM products WHERE barcode=?", (s_bc,))
-        pr = cursor.fetchone()
-        if pr:
-            with st.form("r_form"):
-                aq = st.number_input("الكمية المضافة للمخزن:", value=10.0)
