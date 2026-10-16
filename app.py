@@ -1,12 +1,11 @@
 import streamlit as st
-import pandas as pd
 import sqlite3
 
 st.set_page_config(page_title="كاشير الكشك Pro", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("<style>.block-container {padding: 0.5rem 1rem;} .stButton button {padding: 4px 8px;}</style>", unsafe_allow_html=True)
 
-# تفعيل قاعدة بيانات v30 نظيفة بالكامل لتفادي خطأ السطر 17 التنافسي للجدول
-conn = sqlite3.connect("kiosk_cloud_final_v30.db", check_same_thread=False)
+# تفعيل قاعدة بيانات v35 نظيفة بالكامل تعمل تلقائياً بالمكتبات الافتراضية المدمجة
+conn = sqlite3.connect("kiosk_cloud_final_v35.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
 cursor.execute('''CREATE TABLE IF NOT EXISTS products 
@@ -26,7 +25,7 @@ t1, t2, t3, t4, t5 = st.tabs(["🛒 كاشير المبيعات", "⚡ التم�
 
 cursor.execute("SELECT id, name FROM categories")
 cats_raw = cursor.fetchall()
-cat_dict = {row: row for row in cats_raw}
+cat_dict = {row[1]: row[0] for row in cats_raw}
 cat_names = list(cat_dict.keys())
 
 with t1:
@@ -43,18 +42,18 @@ with t1:
             p_cols = st.columns(3)
             for idx, p in enumerate(prods):
                 with p_cols[idx % 3]:
-                    st.markdown(f"<div style='background:#F8F9FA; padding:5px; border-radius:6px; text-align:center; border:1px solid #DEE2E6;'>📦 <b>{p}</b><br><span style='color:#1E88E5; font-size:11px;'>علبة: {p}دج | قارو: {p}دج</span></div>", unsafe_allow_html=True)
-                    b_type = st.selectbox("النوع:", ["بالعلبة", "بالقارو"], key=f"t_{idx}_{p}")
-                    b_qty = st.number_input("الكمية المطلوبة يدوياً:", min_value=1.0, value=1.0, step=1.0, key=f"q_{idx}_{p}")
+                    st.markdown(f"<div style='background:#F8F9FA; padding:5px; border-radius:6px; text-align:center; border:1px solid #DEE2E6;'>📦 <b>{p[1]}</b><br><span style='color:#1E88E5; font-size:11px;'>علبة: {p[5]}دج | قارو: {p[6]}دج</span></div>", unsafe_allow_html=True)
+                    b_type = st.selectbox("النوع:", ["بالعلبة", "بالقارو"], key=f"t_{idx}_{p[0]}")
+                    b_qty = st.number_input("الكمية المطلوبة يدوياً:", min_value=1.0, value=1.0, step=1.0, key=f"q_{idx}_{p[0]}")
                     
-                    if st.button(f"➕ إضافة {p[:8]}", key=f"b_{idx}_{p}"):
-                        fp = p if "علبة" in b_type else p
-                        sd = b_qty if "علبة" in b_type else b_qty / p
-                        prof = (p-p) * b_qty if "علبة" in b_type else (p-(p/p)) * b_qty
+                    if st.button(f"➕ إضافة {p[1][:8]}", key=f"b_{idx}_{p[0]}"):
+                        fp = p[5] if "علبة" in b_type else p[6]
+                        sd = b_qty if "علبة" in b_type else b_qty / p[7]
+                        prof = (p[5]-p[4]) * b_qty if "علبة" in b_type else (p[6]-(p[4]/p[7])) * b_qty
                         
                         existing_item = None
                         for item in st.session_state.carts[active_cart]:
-                            if item['barcode'] == p and item['type'] == b_type:
+                            if item['barcode'] == p[0] and item['type'] == b_type:
                                 existing_item = item
                                 break
                         if existing_item:
@@ -63,28 +62,29 @@ with t1:
                             existing_item['profit'] += prof
                             existing_item['deduction'] += sd
                         else:
-                            st.session_state.carts[active_cart].append({'barcode': p, 'name': p, 'type': b_type, 'qty': b_qty, 'price': fp, 'total': fp * b_qty, 'profit': prof, 'deduction': sd})
+                            st.session_state.carts[active_cart].append({'barcode': p[0], 'name': p[1], 'type': b_type, 'qty': b_qty, 'price': fp, 'total': fp * b_qty, 'profit': prof, 'deduction': sd})
                         st.rerun()
                         
         b_scan = st.text_input("🔍 أو امسح باركود للبيع السريع:")
         if b_scan:
             cursor.execute("SELECT * FROM products WHERE barcode=?", (b_scan,))
             r = cursor.fetchone()
-            if r and st.button(f"🛒 تأكيد إضافة السلعة: {r}"):
-                st.session_state.carts[active_cart].append({'barcode': r, 'name': r, 'type': "بالعلبة", 'qty': 1.0, 'price': r, 'total': r, 'profit': (r-r), 'deduction': 1.0})
+            if r and st.button(f"🛒 تأكيد إضافة السلعة: {r[1]}"):
+                st.session_state.carts[active_cart].append({'barcode': r[0], 'name': r[1], 'type': "بالعلبة", 'qty': 1.0, 'price': r[5], 'total': r[5], 'profit': (r[5]-r[4]), 'deduction': 1.0})
                 st.rerun()
     with cl:
         st.markdown("##### 🛒 سلة المبيعات")
         if st.session_state.carts[active_cart]:
-            df = pd.DataFrame(st.session_state.carts[active_cart])
-            st.dataframe(df[['name', 'type', 'qty', 'total']], use_container_width=True, height=140)
-            tot = df['total'].sum()
+            # استخدام مصفوفة عادية لعرض السلة دون الحاجة لمكتبة بانداز الثقيلة
+            cart_data = st.session_state.carts[active_cart]
+            st.table([{"الاسم": i['name'], "النوع": i['type'], "الكمية": i['qty'], "المجموع": i['total']} for i in cart_data])
+            tot = sum(i['total'] for i in cart_data)
             st.markdown(f"#### 💰 الحساب الإجمالي: {tot:,} دج")
             pay = st.radio("طريقة الدفع:", ["كاش", "كريدي"], horizontal=True)
             c_name = st.text_input("اسم الزبون المدين:") if "كريدي" in pay else ""
             if st.button("🚀 تأكيد وحفظ البيع", type="primary", use_container_width=True):
                 if "كريدي" in pay and c_name: cursor.execute("INSERT INTO debts (customer_name, total_amount, remaining) VALUES (?, ?, ?)", (c_name, tot, tot))
-                for i in st.session_state.carts[active_cart]:
+                for i in cart_data:
                     cursor.execute("INSERT INTO sales (barcode, name, sale_type, qty, total_price, profit) VALUES (?, ?, ?, ?, ?, ?)", (i['barcode'], i['name'], i['type'], i['qty'], i['total'], i['profit']))
                     cursor.execute("UPDATE products SET stock_box = stock_box - ? WHERE barcode = ?", (i['deduction'], i['barcode']))
                 conn.commit()
@@ -126,7 +126,8 @@ with t3:
                 conn.commit()
                 st.success("✅ تم بنجاح جرد السلعة!")
                 st.rerun()
-    st.dataframe(pd.read_sql_query("SELECT barcode as 'الباركود', name as 'الاسم', sell_box as 'بيع العلبة', stock_box as 'المخزون' FROM products", conn), use_container_width=True)
+    cursor.execute("SELECT barcode, name, sell_box, stock_box FROM products")
+    st.table([{"الباركود": r[0], "الاسم": r[1], "بيع العلبة": r[2], "المخزون": r[3]} for r in cursor.fetchall()])
 
 with t2:
     st.subheader("⚡ تعبئة سلع الموردين")
@@ -137,9 +138,9 @@ with t2:
         if pr:
             with st.form("r_form"):
                 aq = st.number_input("الكمية المضافة للمخزن:", value=10.0)
-                nb = st.number_input("سعر الشراء الجديد:", value=pr)
-                ns = st.number_input("سعر بيع العلبة الجديد:", value=pr)
-                np = st.number_input("سعر بيع القطعة الجديد:", value=pr)
+                nb = st.number_input("سعر الشراء الجديد:", value=pr[4])
+                ns = st.number_input("سعر بيع العلبة الجديد:", value=pr[5])
+                np = st.number_input("سعر بيع القطعة الجديد:", value=pr[6])
                 if st.form_submit_button("💾 تحديث فوري"):
                     cursor.execute("UPDATE products SET stock_box = stock_box + ?, buy_price_box=?, sell_box=?, sell_piece=? WHERE barcode=?", (aq, nb, ns, np, s_bc))
                     conn.commit()
@@ -147,9 +148,13 @@ with t2:
 
 with t4:
     st.subheader("📋 كارني ديون الكشك (الكريدي)")
-    st.dataframe(pd.read_sql_query("SELECT id as 'رقم الحساب', customer_name as 'اسم الزبون', total_amount as 'الدين الكلي', remaining as 'المبلغ المتبقي عليه' FROM debts WHERE remaining > 0", conn), use_container_width=True)
+    cursor.execute("SELECT id, customer_name, total_amount, remaining FROM debts WHERE remaining > 0")
+    st.table([{"رقم الحساب": r[0], "اسم الزبون": r[1], "الدين الكلي": r[2], "المبلغ المتبقي": r[3]} for r in cursor.fetchall()])
 
 with t5:
     st.subheader("📊 أرباح الصندوق الصافية")
-    df_s = pd.read_sql_query("SELECT id, name, total_price, profit, date FROM sales", conn)
-    st.dataframe(df_s, use_container_width=True)
+    cursor.execute("SELECT id, name, total_price, profit, date FROM sales")
+    sales_list = cursor.fetchall()
+    if sales_list:
+        st.markdown(f"### 💰 مجموع الأرباح الصافية الحالية بالخزينة: {sum(r[3] for r in sales_list):,.2f} دج")
+    st.table([{"رقم العملية": r[0], "السلعة": r[1], "المدخول": r[2], "الربح الصافي": r[3], "الوقت": r[4]} for r in sales_list])
