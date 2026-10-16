@@ -5,7 +5,8 @@ import sqlite3
 st.set_page_config(page_title="كاشير الكشك Pro", layout="wide", initial_sidebar_state="collapsed")
 st.markdown("<style>.block-container {padding: 0.5rem 1rem;} .stButton button {padding: 4px 8px;}</style>", unsafe_allow_html=True)
 
-conn = sqlite3.connect("kiosk_cloud_final_v25.db", check_same_thread=False)
+# تفعيل قاعدة بيانات v30 نظيفة بالكامل لتفادي خطأ السطر 17 التنافسي للجدول
+conn = sqlite3.connect("kiosk_cloud_final_v30.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE)")
 cursor.execute('''CREATE TABLE IF NOT EXISTS products 
